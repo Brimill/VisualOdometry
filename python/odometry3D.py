@@ -233,7 +233,7 @@ def extract_keypoints_orb(left_image, right_image, K, baseline, refPoints=None):
 
     p1 = np.array(match_points1).astype(float)
     p2 = np.array(match_points2).astype(float)
-
+    mask: ndarray = np.empty((0, 0))
     # removes points encountered before... Why would someone do that? This makes tracking a feature impossible
     if refPoints is not None:
         mask = removeDuplicate(p1, refPoints)
@@ -241,6 +241,18 @@ def extract_keypoints_orb(left_image, right_image, K, baseline, refPoints=None):
         p2 = p2[mask, :]
 
     print('new lengthL ', len(p1))
+
+    if VISUALIZE:
+        # iterate over matches and remove all features which are not in match or have duplicates
+        visualization: ndarray = cv2.drawMatches(left_image, left_features,
+                                                 right_image, right_features,
+                                                 matches, None, matchesMask=mask.tolist())
+        height, width, depth = visualization.shape
+        imgScale = 1980 / width
+        new_height, new_width = visualization.shape[1] * imgScale, visualization.shape[0] * imgScale
+        visualization = cv2.resize(visualization, (int(new_height), int(new_width)))
+        cv2.imshow("Matches", visualization)
+        cv2.waitKey(1)
 
     M_left = K.dot(np.hstack((np.eye(3), np.zeros((3, 1)))))
     M_right = K.dot(np.hstack((np.eye(3), np.array([[-baseline, 0, 0]]).T)))
