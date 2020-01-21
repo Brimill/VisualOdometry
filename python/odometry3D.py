@@ -82,9 +82,9 @@ def featureTracking(img_1, img_2, p1, world_points):
     lk_params = dict(winSize=(21, 21),
                      maxLevel=3,
                      criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 30, 0.01))
-    p2: ndarray # output vector of 2D points containing calculated new positions of input features in second image
-    status: ndarray # output status vector: if flow for feature has been found the corresponding status is set to 1
-    error: ndarray # output error vector
+    p2: ndarray  # output vector of 2D points containing calculated new positions of input features in second image
+    status: ndarray  # output status vector: if flow for feature has been found the corresponding status is set to 1
+    error: ndarray  # output error vector
     # Calculates for two images and a set of features from the first image the corresponding pixel positions
     # in the second image -> Optical Flow for a Sparse feature set
     p2, status, error = cv2.calcOpticalFlowPyrLK(img_1, img_2, p1, None, **lk_params)
@@ -310,11 +310,11 @@ def playImageSequence(left_img, right_img, K):
                                                                       landmark_3D)
 
         # print(len(landmark_3D), len(valid_land_mark))
-        pnp_3D_points = np.expand_dims(landmark_3D, axis=2) # 3D points
-        pnp_2D_points = np.expand_dims(tracked_2Dpoints, axis=2).astype(float) # corresponding 2D points
-        rotation_vector: ndarray # rotation angles between two camera poses
-        translation_vector: ndarray # translation between two camera poses
-        inliers: ndarray # output vector containing indices of inliers in pnp_3D_points and pnp_2D_points
+        pnp_3D_points = np.expand_dims(landmark_3D, axis=2)  # 3D points
+        pnp_2D_points = np.expand_dims(tracked_2Dpoints, axis=2).astype(float)  # corresponding 2D points
+        rotation_vector: ndarray  # rotation angles between two camera poses
+        translation_vector: ndarray  # translation between two camera poses
+        inliers: ndarray  # output vector containing indices of inliers in pnp_3D_points and pnp_2D_points
         _, rotation_vector, translation_vector, inliers = cv2.solvePnPRansac(pnp_3D_points, pnp_2D_points, K, None)
 
         # update the new reference_2D
@@ -322,7 +322,7 @@ def playImageSequence(left_img, right_img, K):
         landmark_3D = landmark_3D[inliers[:, 0], :]
 
         # retrieve the rotation matrix
-        rot, _ = cv2.Rodrigues(rotation_vector) # converts rotation vector to rotation matrix
+        rot, _ = cv2.Rodrigues(rotation_vector)  # converts rotation vector to rotation matrix
         translation_vector = -rot.T.dot(translation_vector)  # coordinate transformation, from camera to world
 
         inv_transform = np.hstack((rot.T, translation_vector))  # inverse transform
@@ -360,7 +360,8 @@ def playImageSequence(left_img, right_img, K):
 
         # print([truePose[i][3], truePose[i][7], truePose[i][11]])
 
-        text = "Coordinates: x ={0:02f}m y = {1:02f}m z = {2:02f}m".format(float(translation_vector[0]), float(translation_vector[1]),
+        text = "Coordinates: x ={0:02f}m y = {1:02f}m z = {2:02f}m".format(float(translation_vector[0]),
+                                                                           float(translation_vector[1]),
                                                                            float(translation_vector[2]));
         scaling: float = 1
         try:
