@@ -97,45 +97,6 @@ def featureTracking(img_1, img_2, p1, world_points):
     return w_points, p1, p2
 
 
-def stereo_match_feature(left_img, right_img, patch_radius, keypoints, min_disp, max_disp):
-    # in case you want to find stereo match by yourself
-    h, w = left_img.shape
-    num_points = keypoints.shape[0]
-
-    # Depth (or disparity) map
-    depth = np.zeros(left_img.shape, np.uint8)
-    output = np.zeros(keypoints.shape, dtype='int')
-    all_index = np.zeros((keypoints.shape[0], 1), dtype='int').reshape(-1)
-
-    r = patch_radius
-    # patch_size = 2*patch_radius + 1;
-
-    for i in range(num_points):
-
-        row, col = keypoints[i, 0], keypoints[i, 1]
-        # print(row, col)
-        best_offset = 0;
-        best_score = float('inf');
-        if row - r < 0 or row + r >= h or col - r < 0 or col + r >= w: continue
-        left_patch = left_img[(row - r):(row + r + 1), (col - r):(col + r + 1)]  # left imag patch
-        all_index[i] = 1
-
-        for offset in range(min_disp, max_disp + 1):
-
-            if (row - r) < 0 or row + r >= h or (col - r - offset) < 0 or (col + r - offset) >= w: continue
-
-            diff = left_patch - right_img[(row - r):(row + r + 1), (col - r - offset):(col + r - offset + 1)]
-            sum_s = np.sum(diff ** 2)
-
-            if sum_s < best_score:
-                best_score = sum_s
-                best_offset = offset
-
-        output[i, 0], output[i, 1] = row, col - best_offset
-
-    return output, all_index
-
-
 def generate3D(featureL, featureR, K, baseline):
     # points should be 3xN and intensities 1xN, where N is the amount of pixels
     # which have a valid disparity. I.e., only return points and intensities
