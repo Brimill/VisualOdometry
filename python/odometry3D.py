@@ -7,6 +7,13 @@ from numpy.linalg import inv
 
 # from OxfordWrapper import OxfordWrapper
 
+# Settings
+VISUALIZE: bool = True
+# Maximum amount of features Orb should find in each image
+MAX_FEATURES: int = 1000
+# Threshold for hamming distance between matched features
+HAMMING_THRESHOLD: int = 30
+
 
 # def getK():
 #     return np.array([[7.188560000000e+02, 0, 6.071928000000e+02],
@@ -207,13 +214,13 @@ def initialize_3D_points(left_img, right_img, K, baseline):
 
 def extract_keypoints_orb(left_image, right_image, K, baseline, refPoints=None):
     # detector = cv2.xfeatures2d.SURF_create(400)
-    detector = cv2.ORB_create(2000)
+    detector = cv2.ORB_create(MAX_FEATURES)
     left_features, left_descriptors = detector.detectAndCompute(left_image, None)
     right_features, right_descriptors = detector.detectAndCompute(right_image, None)
 
     bf_matcher = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
     matches = bf_matcher.match(left_descriptors, right_descriptors)
-    matches = [match for match in matches if match.distance < 30]
+    matches = [match for match in matches if match.distance < HAMMING_THRESHOLD]
     print("Matches left over: " + str(len(matches)))
 
     # ratio test as per Lowe's paper
