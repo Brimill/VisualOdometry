@@ -67,36 +67,36 @@ def getRightImage(i):
     return cv2.imread("/run/media/rudiger/RobotCar/sequences/03/image_3/{0:06d}.png".format(i), 0)
 
 
-def featureDetection(img, numCorners):
-    h, w = img.shape
-    thresh = dict(threshold=24, nonmaxSuppression=True)
-    fast = cv2.FastFeatureDetector_create(**thresh)
-    kp1 = fast.detect(img)
-    kp1 = sorted(kp1, key=lambda x: x.response, reverse=True)[:numCorners]
+# def featureDetection(img, numCorners):
+#     h, w = img.shape
+#     thresh = dict(threshold=24, nonmaxSuppression=True)
+#     fast = cv2.FastFeatureDetector_create(**thresh)
+#     kp1 = fast.detect(img)
+#     kp1 = sorted(kp1, key=lambda x: x.response, reverse=True)[:numCorners]
+#
+#     p1 = np.array([ele.pt for ele in kp1], dtype='int')
+#     # img3 = cv2.drawKeypoints(img, kp1, None, color=(255,0,0))
+#     # cv2.imshow('fast',img3)
+#     # cv2.waitKey(0) & 0xFF
+#     return p1
 
-    p1 = np.array([ele.pt for ele in kp1], dtype='int')
-    # img3 = cv2.drawKeypoints(img, kp1, None, color=(255,0,0))
-    # cv2.imshow('fast',img3)
-    # cv2.waitKey(0) & 0xFF
-    return p1
 
-
-def featureTracking(img_1, img_2, p1, world_points):
+def featureTracking(img_t1, img_t2, points_t1, world_points):
     ##use KLT tracker
     lk_params = dict(winSize=(21, 21),
                      maxLevel=3,
                      criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 30, 0.01))
-    p2: ndarray  # output vector of 2D points containing calculated new positions of input features in second image
+    points_t2: ndarray  # output vector of 2D points containing calculated new positions of input features in second image
     status: ndarray  # output status vector: if flow for feature has been found the corresponding status is set to 1
     error: ndarray  # output error vector
     # Calculates for two images and a set of features from the first image the corresponding pixel positions
     # in the second image -> Optical Flow for a Sparse feature set
-    p2, status, error = cv2.calcOpticalFlowPyrLK(img_1, img_2, p1, None, **lk_params)
+    points_t2, status, error = cv2.calcOpticalFlowPyrLK(img_t1, img_t2, points_t1, None, **lk_params)
     status = status.reshape(status.shape[0])
     # find good one
     # only select features where a the new pixel position has been found
-    p1 = p1[status == 1]
-    p2 = p2[status == 1]
+    points_t1 = points_t1[status == 1]
+    points_t2 = points_t2[status == 1]
     w_points = world_points[status == 1]
     if VISUALIZE_TRACKING:
         # draw lines between prev points and next points
@@ -112,31 +112,31 @@ def featureTracking(img_1, img_2, p1, world_points):
     return w_points, points_t1, points_t2
 
 
-def generate3D(featureL, featureR, K, baseline):
-    # points should be 3xN and intensities 1xN, where N is the amount of pixels
-    # which have a valid disparity. I.e., only return points and intensities
-    # for pixels of left_img which have a valid disparity estimate! The i-th
-    # intensity should correspond to the i-th point.
-
-    temp = featureL - featureR
-    temp = temp[:, 1]
-
-    print(featureL.shape, featureR.shape)
-
-    px_left = np.vstack((featureL.T, np.ones((1, featureL.shape[0]))))
-    # Switch from (row, col, 1) to (u, v, 1)
-    px_left[0:2, :] = np.flipud(px_left[0:2, :])
-
-    bv_left = inv(K).dot(px_left)
-
-    f = K[0, 0]
-
-    z = f * baseline / temp
-    points = bv_left * z
-
-    # intensities = left_img.reshape(-1)[disp_im > 0]
-
-    return points
+# def generate3D(featureL, featureR, K, baseline):
+#     # points should be 3xN and intensities 1xN, where N is the amount of pixels
+#     # which have a valid disparity. I.e., only return points and intensities
+#     # for pixels of left_img which have a valid disparity estimate! The i-th
+#     # intensity should correspond to the i-th point.
+#
+#     temp = featureL - featureR
+#     temp = temp[:, 1]
+#
+#     print(featureL.shape, featureR.shape)
+#
+#     px_left = np.vstack((featureL.T, np.ones((1, featureL.shape[0]))))
+#     # Switch from (row, col, 1) to (u, v, 1)
+#     px_left[0:2, :] = np.flipud(px_left[0:2, :])
+#
+#     bv_left = inv(K).dot(px_left)
+#
+#     f = K[0, 0]
+#
+#     z = f * baseline / temp
+#     points = bv_left * z
+#
+#     # intensities = left_img.reshape(-1)[disp_im > 0]
+#
+#     return points
 
 
 def removeDuplicate(queryPoints, refPoints, radius=5):
@@ -154,38 +154,6 @@ def removeDuplicate(queryPoints, refPoints, radius=5):
             if curr_kps_in_x_lim_and_y_lim.shape[0] != 0:
                 queryPoints[i] = np.array([0, 0])
     return (queryPoints[:, 0] != 0)
-
-
-def initialize_3D_points(left_img, right_img, K, baseline):
-    p1 = featureDetection(left_img, 500)
-    p1 = np.fliplr(p1)
-    # img_show  = cv2.imread('../data/left/{0:06d}.png'.format(0))
-    p2, all_index = stereo_match_feature(left_img, right_img, 5, p1, 5, 50)
-
-    p1 = p1[all_index > 0, :]
-    p2 = p2[all_index > 0, :]
-
-    M_left = K.dot(np.hstack((np.eye(3), np.zeros((3, 1)))))
-    M_rght = K.dot(np.hstack((np.eye(3), np.array([[-baseline, 0, 0]]).T)))
-
-    p1_flip = np.vstack((np.flipud(p1.T), np.ones((1, p1.shape[0]))))
-    p2_flip = np.vstack((np.flipud(p2.T), np.ones((1, p1.shape[0]))))
-
-    # for p in p1:
-    #     cv2.circle(img_show, (p[1], p[0]) ,1, (0,0,255), 2);
-
-    P = cv2.triangulatePoints(M_left, M_rght, p1_flip[:2], p2_flip[:2])
-
-    P = P / P[3]
-    points = P[:3]
-
-    # for p in p1:
-    #     cv2.circle(left_img, (p[0], p[1]) ,1, (0,0,255), 2);
-
-    # cv2.imshow('images', img_show)
-    # k = cv2.waitKey(0) & 0xFF
-    # print(points.T)
-    return points.T, p1
 
 
 def extract_keypoints_orb(left_image, right_image, K, baseline, refPoints=None):
@@ -207,16 +175,17 @@ def extract_keypoints_orb(left_image, right_image, K, baseline, refPoints=None):
 
     print('old lengthL', len(match_points1))
 
-    p1 = np.array(match_points1).astype(float)
-    p2 = np.array(match_points2).astype(float)
+    clean_left_points: ndarray = np.array(match_points1).astype(float)
+    clean_right_points: ndarray = np.array(match_points2).astype(float)
     mask: ndarray = np.empty((0, 0))
+
     # removes points encountered before... Why would someone do that? This makes tracking a feature impossible
     if refPoints is not None:
-        mask = removeDuplicate(p1, refPoints)
-        p1 = p1[mask, :]
-        p2 = p2[mask, :]
+        mask = removeDuplicate(clean_left_points, refPoints)
+        clean_left_points = clean_left_points[mask, :]
+        clean_right_points = clean_right_points[mask, :]
 
-    print('new lengthL ', len(p1))
+    print('new lengthL ', len(clean_left_points))
 
     if VISUALIZE_STEREO_FEATURES:
         # iterate over matches and remove all features which are not in match or have duplicates
@@ -233,15 +202,15 @@ def extract_keypoints_orb(left_image, right_image, K, baseline, refPoints=None):
     M_left = K.dot(np.hstack((np.eye(3), np.zeros((3, 1)))))
     M_right = K.dot(np.hstack((np.eye(3), np.array([[-baseline, 0, 0]]).T)))
 
-    p1_flip = np.vstack((p1.T, np.ones((1, p1.shape[0]))))
-    p2_flip = np.vstack((p2.T, np.ones((1, p2.shape[0]))))
+    flipped_clean_left_points = np.vstack((clean_left_points.T, np.ones((1, clean_left_points.shape[0]))))
+    flipped_clean_right_points = np.vstack((clean_right_points.T, np.ones((1, clean_right_points.shape[0]))))
 
-    P = cv2.triangulatePoints(M_left, M_right, p1_flip[:2], p2_flip[:2])
+    P = cv2.triangulatePoints(M_left, M_right, flipped_clean_left_points[:2], flipped_clean_right_points[:2])
 
     P = P / P[3]
     land_points = P[:3]
 
-    return land_points.T, p1
+    return land_points.T, clean_left_points
 
 
 def playImageSequence(left_img, right_img, K):
@@ -276,7 +245,7 @@ def playImageSequence(left_img, right_img, K):
     landmark_3D = points
     # _, rotation_vector, translation_vector = cv2.solvePnP(pnp_3D_points, pnp_p1, K, None)
     # truePose = getTruePose()
-    trajectory_image = np.zeros((600, 600, 3), dtype=np.uint8);
+    trajectory_image = np.zeros((600, 600, 3), dtype=np.uint8)
     maxError = 0
 
     for i in range(START_INDEX, 2000):
@@ -292,6 +261,9 @@ def playImageSequence(left_img, right_img, K):
         translation_vector: ndarray  # translation between two camera poses
         inliers: ndarray  # output vector containing indices of inliers in pnp_3D_points and pnp_2D_points
         _, rotation_vector, translation_vector, inliers = cv2.solvePnPRansac(pnp_3D_points, pnp_2D_points, K, None)
+
+        # TODO what should happen when Ransac does not find any inliers
+        # TODO check projection matrix again to see if that caused the error
 
         # update the new reference_2D
         reference_2D = tracked_2Dpoints[inliers[:, 0], :]
@@ -359,7 +331,7 @@ def playImageSequence(left_img, right_img, K):
 
     # cv2.waitKey(0)
     print('Maximum Error: ', maxError)
-    cv2.imwrite('map2.png', trajectory_image);
+    cv2.imwrite('map2.png', trajectory_image)
 
 
 #  imgpts, jac = cv2.projectPoints(pnp_objP, rvec, tvec, K, None)
