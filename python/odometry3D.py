@@ -166,7 +166,7 @@ def extract_keypoints_orb(left_image, right_image, K, baseline, refPoints=None):
     matches = bf_matcher.match(left_descriptors, right_descriptors)
     matches = sorted(matches, key=lambda x: x.distance)
     matches = matches[:MAX_MATCHES]
-    print("Max Hamming Distance: " + str(matches[MAX_MATCHES-1].distance))
+    print("Max Hamming Distance: " + str(matches[MAX_MATCHES - 1].distance))
 
     # ratio test as per Lowe's paper
     match_points1, match_points2 = [], []
@@ -248,7 +248,8 @@ def playImageSequence(left_img, right_img, K):
     # truePose = getTruePose()
     trajectory_image = np.zeros((600, 600, 3), dtype=np.uint8)
     maxError = 0
-
+    prev_rotation_vector: ndarray
+    prev_translation_vector: ndarray
     for i in range(START_INDEX, 2000):
         print('image: ', i)
         curImage = getLeftImage(i)
@@ -261,7 +262,10 @@ def playImageSequence(left_img, right_img, K):
         rotation_vector: ndarray  # rotation angles between two camera poses
         translation_vector: ndarray  # translation between two camera poses
         inliers: ndarray  # output vector containing indices of inliers in pnp_3D_points and pnp_2D_points
-        _, rotation_vector, translation_vector, inliers = cv2.solvePnPRansac(pnp_3D_points, pnp_2D_points, K, None)
+        if i > START_INDEX:
+            _, rotation_vector, translation_vector, inliers = cv2.solvePnPRansac(pnp_3D_points, pnp_2D_points, K, None, useExtrinsicGuess=True, rvec=prev_rotation_vector, tvec=prev_translation_vector)
+        else:
+            _, rotation_vector, translation_vector, inliers = cv2.solvePnPRansac(pnp_3D_points, pnp_2D_points, K, None)
 
         # TODO what should happen when Ransac does not find any inliers
         # TODO check projection matrix again to see if that caused the error
