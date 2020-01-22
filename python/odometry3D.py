@@ -164,8 +164,9 @@ def extract_keypoints_orb(left_image, right_image, K, baseline, refPoints=None):
 
     bf_matcher = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
     matches = bf_matcher.match(left_descriptors, right_descriptors)
-    matches = [match for match in matches if match.distance < HAMMING_THRESHOLD]
-    print("Matches left over: " + str(len(matches)))
+    matches = sorted(matches, key=lambda x: x.distance)
+    matches = matches[:MAX_MATCHES]
+    print("Max Hamming Distance: " + str(matches[MAX_MATCHES-1].distance))
 
     # ratio test as per Lowe's paper
     match_points1, match_points2 = [], []
