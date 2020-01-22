@@ -13,10 +13,10 @@ VISUALIZE_TRACKING: bool = True
 VISUALIZE_STEREO_FEATURES: bool = False
 # Maximum amount of features Orb should find in each image
 MAX_FEATURES: int = 1000
-# Threshold for hamming distance between matched features
-HAMMING_THRESHOLD: int = 30
+# The number of matches to be considered. Only uses matches with best hamming distance
+MAX_MATCHES: int = 100
 # Image index from which to start
-START_INDEX: int = 60
+START_INDEX: int = 620
 
 
 # def getK():
@@ -293,8 +293,8 @@ def playImageSequence(left_img, right_img, K):
             reference_2D = np.vstack((reference_2D, reference_2D_new[valid_matches, :]))
             landmark_3D = np.vstack((landmark_3D, landmark_3D_new.T))
 
+        reference_img = curImage
         if VISUALIZE_CUR_IMAGE:
-            reference_img = curImage
             cv2.imshow("Current Image", reference_img)
 
         # draw images
