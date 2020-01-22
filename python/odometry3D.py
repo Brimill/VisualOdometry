@@ -8,11 +8,15 @@ from numpy.linalg import inv
 # from OxfordWrapper import OxfordWrapper
 
 # Settings
-VISUALIZE: bool = True
+VISUALIZE_CUR_IMAGE: bool = False
+VISUALIZE_TRACKING: bool = True
+VISUALIZE_STEREO_FEATURES: bool = False
 # Maximum amount of features Orb should find in each image
 MAX_FEATURES: int = 1000
 # Threshold for hamming distance between matched features
 HAMMING_THRESHOLD: int = 30
+# Image index from which to start
+START_INDEX: int = 60
 
 
 # def getK():
@@ -94,7 +98,18 @@ def featureTracking(img_1, img_2, p1, world_points):
     p1 = p1[status == 1]
     p2 = p2[status == 1]
     w_points = world_points[status == 1]
-    return w_points, p1, p2
+    if VISUALIZE_TRACKING:
+        # draw lines between prev points and next points
+        # draw the tracks
+        frame: ndarray = cv2.cvtColor(img_t1, cv2.COLOR_GRAY2RGB)
+        for i, (new, old) in enumerate(zip(points_t1, points_t2)):
+            a, b = new.ravel()
+            c, d = old.ravel()
+            frame = cv2.line(frame, (a, b), (c, d), [19, 252, 3], 2)
+            frame = cv2.circle(frame, (a, b), 1, [252, 3, 61], -1)
+        cv2.imshow("Tracking", frame)
+        cv2.waitKey(1)
+    return w_points, points_t1, points_t2
 
 
 def generate3D(featureL, featureR, K, baseline):
@@ -203,7 +218,7 @@ def extract_keypoints_orb(left_image, right_image, K, baseline, refPoints=None):
 
     print('new lengthL ', len(p1))
 
-    if VISUALIZE:
+    if VISUALIZE_STEREO_FEATURES:
         # iterate over matches and remove all features which are not in match or have duplicates
         visualization: ndarray = cv2.drawMatches(left_image, left_features,
                                                  right_image, right_features,
@@ -264,7 +279,7 @@ def playImageSequence(left_img, right_img, K):
     trajectory_image = np.zeros((600, 600, 3), dtype=np.uint8);
     maxError = 0
 
-    for i in range(0, 2000):
+    for i in range(START_INDEX, 2000):
         print('image: ', i)
         curImage = getLeftImage(i)
         landmark_3D, reference_2D, tracked_2Dpoints = featureTracking(reference_img, curImage, reference_2D,
@@ -306,8 +321,9 @@ def playImageSequence(left_img, right_img, K):
             reference_2D = np.vstack((reference_2D, reference_2D_new[valid_matches, :]))
             landmark_3D = np.vstack((landmark_3D, landmark_3D_new.T))
 
-        reference_img = curImage
-        cv2.imshow("Current Image", reference_img)
+        if VISUALIZE_CUR_IMAGE:
+            reference_img = curImage
+            cv2.imshow("Current Image", reference_img)
 
         # draw images
         draw_x, draw_y = int(translation_vector[0]) + 300, int(translation_vector[2]) + 100
@@ -356,8 +372,8 @@ if __name__ == '__main__':
     # right_img = cv2. cvtColor(right_img, cv2.COLOR_BGR2GRAY)
     # for i in range (0,60000):
     #     print('/Users/HJK-BD//Downloads/kitti/00/image_0/{0:06d}.png'.format(i))
-    left_img = getLeftImage(0)
-    right_img = getRightImage(0)
+    left_img = getLeftImage(START_INDEX)
+    right_img = getRightImage(START_INDEX)
 
     # baseline is the distance between both cameras
     baseline = 0.54;
