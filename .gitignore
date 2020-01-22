@@ -6,3 +6,6 @@ build
 
 # files in __pycache__
 *.pyc
+
+# unused libraries
+python/lib/*
