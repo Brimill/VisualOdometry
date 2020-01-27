@@ -12,17 +12,15 @@ VISUALIZE_CUR_IMAGE: bool = False
 VISUALIZE_TRACKING: bool = True
 VISUALIZE_STEREO_FEATURES: bool = False
 # Maximum amount of features Orb should find in each image
-MAX_FEATURES: int = 1000
+MAX_FEATURES: int = 4000
 # The number of matches to be considered. Only uses matches with best hamming distance
-MAX_MATCHES: int = 100
+MAX_MATCHES: int = 400
 # Image index from which to start
-START_INDEX: int = 620
-
-
-# def getK():
-#     return np.array([[7.188560000000e+02, 0, 6.071928000000e+02],
-#                      [0, 7.188560000000e+02, 1.852157000000e+02],
-#                      [0, 0, 1]])
+START_INDEX: int = 0
+# Image index after which to stop
+STOP_INDEX: int = 5000
+# Select KITTI sequence
+KITTI_SEQUENCE: str ="03"
 
 def getK():
     return np.array([[7.215377000000e+02, 0, 6.095593000000e+02],
@@ -59,26 +57,20 @@ def getLandMarks():
 
 def getLeftImage(i):
     # return cv2.imread('/Users/HJK-BD//Downloads/kitti/00/image_0/{0:06d}.png'.format(i), 0)
-    return cv2.imread("/run/media/rudiger/RobotCar/sequences/03/image_2/{0:06d}.png".format(i), 0)
+    return cv2.imread("/run/media/rudiger/RobotCar/sequences/"+KITTI_SEQUENCE+"/image_2/{0:06d}.png".format(i), 0)
 
 
 def getRightImage(i):
     # return cv2.imread('/Users/HJK-BD//Downloads/kitti/00/image_1/{0:06d}.png'.format(i), 0)
-    return cv2.imread("/run/media/rudiger/RobotCar/sequences/03/image_3/{0:06d}.png".format(i), 0)
+    return cv2.imread("/run/media/rudiger/RobotCar/sequences/"+KITTI_SEQUENCE+"/image_3/{0:06d}.png".format(i), 0)
 
 
-# def featureDetection(img, numCorners):
-#     h, w = img.shape
-#     thresh = dict(threshold=24, nonmaxSuppression=True)
-#     fast = cv2.FastFeatureDetector_create(**thresh)
-#     kp1 = fast.detect(img)
-#     kp1 = sorted(kp1, key=lambda x: x.response, reverse=True)[:numCorners]
-#
-#     p1 = np.array([ele.pt for ele in kp1], dtype='int')
-#     # img3 = cv2.drawKeypoints(img, kp1, None, color=(255,0,0))
-#     # cv2.imshow('fast',img3)
-#     # cv2.waitKey(0) & 0xFF
-#     return p1
+def calcRelativeTranslation(first_vector: ndarray, second_vector: ndarray)->ndarray:
+    return np.ndarray([second_vector[i] - first_vector[i] for i in range(2)])
+
+
+def euclidDistance(first_vector: ndarray, second_vector: ndarray)->float:
+    return sqrt((first_vector[0] - second_vector[0])**2 + (first_vector[1] - second_vector[1]) ** 2 + (first_vector[2] - second_vector[2]) ** 2)
 
 
 def featureTracking(img_t1, img_t2, points_t1, world_points):
@@ -110,33 +102,6 @@ def featureTracking(img_t1, img_t2, points_t1, world_points):
         cv2.imshow("Tracking", frame)
         cv2.waitKey(1)
     return w_points, points_t1, points_t2
-
-
-# def generate3D(featureL, featureR, K, baseline):
-#     # points should be 3xN and intensities 1xN, where N is the amount of pixels
-#     # which have a valid disparity. I.e., only return points and intensities
-#     # for pixels of left_img which have a valid disparity estimate! The i-th
-#     # intensity should correspond to the i-th point.
-#
-#     temp = featureL - featureR
-#     temp = temp[:, 1]
-#
-#     print(featureL.shape, featureR.shape)
-#
-#     px_left = np.vstack((featureL.T, np.ones((1, featureL.shape[0]))))
-#     # Switch from (row, col, 1) to (u, v, 1)
-#     px_left[0:2, :] = np.flipud(px_left[0:2, :])
-#
-#     bv_left = inv(K).dot(px_left)
-#
-#     f = K[0, 0]
-#
-#     z = f * baseline / temp
-#     points = bv_left * z
-#
-#     # intensities = left_img.reshape(-1)[disp_im > 0]
-#
-#     return points
 
 
 def removeDuplicate(queryPoints, refPoints, radius=5):
@@ -251,6 +216,7 @@ def playImageSequence(left_img, right_img, K):
     prev_rotation_vector: ndarray
     prev_translation_vector: ndarray
     for i in range(START_INDEX, 2000):
+    for i in range(START_INDEX, STOP_INDEX):
         print('image: ', i)
         curImage = getLeftImage(i)
         landmark_3D, reference_2D, tracked_2Dpoints = featureTracking(reference_img, curImage, reference_2D,
@@ -316,23 +282,24 @@ def playImageSequence(left_img, right_img, K):
 
         text = "Coordinates: x ={0:02f}m y = {1:02f}m z = {2:02f}m".format(float(translation_vector[0]),
                                                                            float(translation_vector[1]),
-                                                                           float(translation_vector[2]));
+                                                                           float(translation_vector[2]))
         scaling: float = 1
         try:
             cv2.circle(trajectory_image, (int(draw_x * scaling), int(draw_y * scaling)), 1, (0, 0, 255), 2);
         except:
-            print("Something went wrong while drawing trajectory.");
-        finally:
-            print("x: " + str(translation_vector[0]))
-            print("y: " + str(translation_vector[2]))
+            print("Something went wrong while drawing trajectory.")
+        # finally:
+        #     print("x: " + str(translation_vector[0]))
+        #     print("y: " + str(translation_vector[2]))
 
         # cv2.circle(trajectory_image, (int(draw_x*scaling), int(draw_y*scaling)), 1, (0, 0, 255), 2);
         # cv2.circle(trajectory_image, (true_x, true_y), 1, (255, 0, 0), 2);
         cv2.rectangle(trajectory_image, (10, 30), (550, 50), (0, 0, 0), cv2.FILLED);
         cv2.putText(trajectory_image, text, (10, 50), cv2.FONT_HERSHEY_PLAIN, 1, (255, 255, 255), 1, 8);
-        cv2.imshow("Trajectory", trajectory_image);
+        cv2.imshow("Trajectory", trajectory_image)
         k = cv2.waitKey(1) & 0xFF
         if k == 27: break
+
 
     # cv2.waitKey(0)
     print('Maximum Error: ', maxError)
@@ -353,7 +320,7 @@ if __name__ == '__main__':
     right_img = getRightImage(START_INDEX)
 
     # baseline is the distance between both cameras
-    baseline = 0.54;
+    baseline = 0.54
     K = getK()
 
     playImageSequence(left_img, right_img, K)
