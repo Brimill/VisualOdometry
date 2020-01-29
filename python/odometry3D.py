@@ -1,4 +1,5 @@
 import sys
+from math import sqrt
 
 import numpy as np
 from numpy import ndarray
@@ -22,7 +23,8 @@ START_INDEX: int = 0
 # Image index after which to stop
 STOP_INDEX: int = 5000
 # Select KITTI sequence
-KITTI_SEQUENCE: str ="03"
+KITTI_SEQUENCE: str = "03"
+
 
 def getK():
     return np.array([[7.215377000000e+02, 0, 6.095593000000e+02],
@@ -44,12 +46,12 @@ def getMLeft():
 
 def getLeftImage(i):
     # return cv2.imread('/Users/HJK-BD//Downloads/kitti/00/image_0/{0:06d}.png'.format(i), 0)
-    return cv2.imread("/run/media/rudiger/RobotCar/sequences/"+KITTI_SEQUENCE+"/image_2/{0:06d}.png".format(i), 0)
+    return cv2.imread("/run/media/rudiger/RobotCar/sequences/" + KITTI_SEQUENCE + "/image_2/{0:06d}.png".format(i), 0)
 
 
 def getRightImage(i):
     # return cv2.imread('/Users/HJK-BD//Downloads/kitti/00/image_1/{0:06d}.png'.format(i), 0)
-    return cv2.imread("/run/media/rudiger/RobotCar/sequences/"+KITTI_SEQUENCE+"/image_3/{0:06d}.png".format(i), 0)
+    return cv2.imread("/run/media/rudiger/RobotCar/sequences/" + KITTI_SEQUENCE + "/image_3/{0:06d}.png".format(i), 0)
 
 
 def featureTracking(img_t1, img_t2, points_t1, world_points):
@@ -118,7 +120,7 @@ def extract_keypoints_orb(left_image, right_image, K, baseline, refPoints=None):
         match_points1.append(left_features[match.queryIdx].pt)
         match_points2.append(right_features[match.trainIdx].pt)
 
-    print('old lengthL', len(match_points1))
+    # print('old lengthL', len(match_points1))
 
     clean_left_points: ndarray = np.array(match_points1).astype(float)
     clean_right_points: ndarray = np.array(match_points2).astype(float)
@@ -130,7 +132,7 @@ def extract_keypoints_orb(left_image, right_image, K, baseline, refPoints=None):
         clean_left_points = clean_left_points[mask, :]
         clean_right_points = clean_right_points[mask, :]
 
-    print('new lengthL ', len(clean_left_points))
+    # print('new lengthL ', len(clean_left_points))
 
     if VISUALIZE_STEREO_FEATURES:
         # iterate over matches and remove all features which are not in match or have duplicates
@@ -168,38 +170,25 @@ def playImageSequence(left_img, right_img, K):
         or you can use the OPENCV feature extraction and matching functions
     '''
 
-    # p1 = getKepoints().astype('float32')
-
-    # print(p1)
-
-    # points = getLandMarks()
-
-    # points, p1 = initialize_3D_points(left_img, right_img, K, baseline)
-    # points = points.T
-    # p1 = np.fliplr(p1).astype('float32')
-    # print(points.shape)
-    # print(p1.shape)
-
     points, p1 = extract_keypoints_orb(left_img, right_img, K, baseline)
     p1 = p1.astype('float32')
-
-    pnp_3D_points = np.expand_dims(points, axis=2)
-    pnp_p1 = np.expand_dims(p1, axis=2).astype(float)
 
     # reference
     reference_img = left_img
     reference_2D = p1
     landmark_3D = points
-    # _, rotation_vector, translation_vector = cv2.solvePnP(pnp_3D_points, pnp_p1, K, None)
     # truePose = getTruePose()
     trajectory_image = np.zeros((600, 600, 3), dtype=np.uint8)
     maxError = 0
-    prev_rotation_vector: ndarray
+    prev_pose_vector_r: ndarray
+    prev_pose_vector_t: ndarray
     prev_translation_vector: ndarray
-    for i in range(START_INDEX, 2000):
+    last_successful_pose: int = START_INDEX
+    # distances: ndarray = np.empty(1)
     for i in range(START_INDEX, STOP_INDEX):
         print('image: ', i)
         curImage = getLeftImage(i)
+
         landmark_3D, reference_2D, tracked_2Dpoints = featureTracking(reference_img, curImage, reference_2D,
                                                                       landmark_3D)
 
@@ -208,25 +197,66 @@ def playImageSequence(left_img, right_img, K):
         pnp_2D_points = np.expand_dims(tracked_2Dpoints, axis=2).astype(float)  # corresponding 2D points
         rotation_vector: ndarray  # rotation angles between two camera poses
         translation_vector: ndarray  # translation between two camera poses
+        pose_vector_t: ndarray
+        pose_vector_r: ndarray
         inliers: ndarray  # output vector containing indices of inliers in pnp_3D_points and pnp_2D_points
-        if i > START_INDEX:
-            _, rotation_vector, translation_vector, inliers = cv2.solvePnPRansac(pnp_3D_points, pnp_2D_points, K, None, useExtrinsicGuess=True, rvec=prev_rotation_vector, tvec=prev_translation_vector)
+
+        if i > START_INDEX + 2:
+            _, pose_vector_r, pose_vector_t, inliers = cv2.solvePnPRansac(pnp_3D_points, pnp_2D_points, K, None,
+                                                                          useExtrinsicGuess=True,
+                                                                          rvec=prev_pose_vector_r,
+                                                                          tvec=prev_translation_vector)
         else:
-            _, rotation_vector, translation_vector, inliers = cv2.solvePnPRansac(pnp_3D_points, pnp_2D_points, K, None)
+            _, pose_vector_r, pose_vector_t, inliers = cv2.solvePnPRansac(pnp_3D_points, pnp_2D_points, K, None)
 
         # TODO what should happen when Ransac does not find any inliers
-        # TODO check projection matrix again to see if that caused the error
 
         # update the new reference_2D
-        reference_2D = tracked_2Dpoints[inliers[:, 0], :]
-        landmark_3D = landmark_3D[inliers[:, 0], :]
+        if inliers is not None:
+            # store tracked_2D points which were classified as inliers in reference_2D
+            reference_2D = tracked_2Dpoints[inliers[:, 0], :]
+            # store tracked 3D points which were classified as inliers in landmark_3D
+            landmark_3D = landmark_3D[inliers[:, 0], :]
+            inliers_ratio = len(inliers) / len(pnp_3D_points)  # the inlier ratio
 
         # retrieve the rotation matrix
-        rot, _ = cv2.Rodrigues(rotation_vector)  # converts rotation vector to rotation matrix
-        translation_vector = -rot.T.dot(translation_vector)  # coordinate transformation, from camera to world
+        rot, _ = cv2.Rodrigues(pose_vector_r)  # converts rotation vector to rotation matrix
+        pose_vector_t = -rot.T.dot(pose_vector_t)
 
-        inv_transform = np.hstack((rot.T, translation_vector))  # inverse transform
-        inliers_ratio = len(inliers) / len(pnp_3D_points)  # the inlier ratio
+        # if i > 0:
+        #     distance = euclidDistance(translation_vector, prev_translation_vector)
+        #     print("Euclid Distance: " + str(distance))
+        #     distances = np.append(distances, distance)
+
+        # predict pose vector by applying prev_translation_vector to prev_pose
+        # if difference between prediction pose and real pose is too large -> assume faulty measurement
+        pose_prediction: ndarray
+        if i >= 2:
+            timesteps_from_last_successful_pose: int = i - last_successful_pose
+            pose_prediction = prev_pose_vector_t + timesteps_from_last_successful_pose * prev_translation_vector
+            distance: float = util.euclidDistance(pose_prediction, prev_pose_vector_t)
+            if distance > timesteps_from_last_successful_pose * 50:
+                # distance between pose and prediction is to big
+                pose_vector_t = pose_prediction
+                pose_vector_r = prev_pose_vector_r
+                print("Euclid Distance: " + str(distance))
+                print("Euclid Distance is too great")
+            else:
+                last_successful_pose = i
+                prev_translation_vector = util.calcRelativeTranslation(prev_pose_vector_t, pose_vector_t)
+                prev_pose_vector_t = pose_vector_t
+                prev_pose_vector_r = pose_vector_r
+        if i == 1:
+            last_successful_pose = i
+            prev_translation_vector = util.calcRelativeTranslation(prev_pose_vector_t, pose_vector_t)
+            prev_pose_vector_t = pose_vector_t
+            prev_pose_vector_r = pose_vector_r
+        if i == 0:
+            last_successful_pose = i
+            prev_pose_vector_t = pose_vector_t
+            prev_pose_vector_r = pose_vector_r
+
+        inv_transform = np.hstack((rot.T, pose_vector_t))  # inverse transform
 
         print('inliers ratio: ', inliers_ratio)
 
@@ -234,8 +264,6 @@ def playImageSequence(left_img, right_img, K):
         if inliers_ratio < 0.9 or len(reference_2D) < 50:
             # initialization new landmarks
             curImage_R = getRightImage(i)
-            # landmark_3D, reference_2D = initialize_3D_points(curImage, curImage_R, K, baseline)
-            # reference_2D = np.fliplr(reference_2D).astype('float32')
             landmark_3D_new, reference_2D_new = extract_keypoints_orb(curImage, curImage_R, K, baseline, reference_2D)
             reference_2D_new = reference_2D_new.astype('float32')
             landmark_3D_new = inv_transform.dot(np.vstack((landmark_3D_new.T, np.ones((1, landmark_3D_new.shape[0])))))
@@ -246,11 +274,17 @@ def playImageSequence(left_img, right_img, K):
             landmark_3D = np.vstack((landmark_3D, landmark_3D_new.T))
 
         reference_img = curImage
+
+        # if not containsNaN(rotation_vector) and not containsNaN(translation_vector) and not inliers_ratio < 0.5:
+        #     prev_rotation_vector = rotation_vector
+        #     prev_translation_vector = translation_vector
         if VISUALIZE_CUR_IMAGE:
             cv2.imshow("Current Image", reference_img)
 
         # draw images
-        draw_x, draw_y = int(translation_vector[0]) + 300, int(translation_vector[2]) + 100
+        if not util.containsNaN(pose_vector_r) and not util.containsNaN(pose_vector_t):
+            # if not np.isnan(pose_vector_r).any() and not np.isnan(pose_vector_r).any()
+            draw_x, draw_y = int(pose_vector_t[0]) + 300, int(pose_vector_t[2]) + 100
         # true_x, true_y = int(truePose[i][3]) + 300, int(truePose[i][11]) + 100
 
         # curError = np.sqrt(
@@ -261,17 +295,14 @@ def playImageSequence(left_img, right_img, K):
 
         # print([truePose[i][3], truePose[i][7], truePose[i][11]])
 
-        text = "Coordinates: x ={0:02f}m y = {1:02f}m z = {2:02f}m".format(float(translation_vector[0]),
-                                                                           float(translation_vector[1]),
-                                                                           float(translation_vector[2]))
+        text = "Coordinates: x ={0:02f}m y = {1:02f}m z = {2:02f}m".format(float(pose_vector_t[0]),
+                                                                           float(pose_vector_t[1]),
+                                                                           float(pose_vector_t[2]))
         scaling: float = 1
         try:
-            cv2.circle(trajectory_image, (int(draw_x * scaling), int(draw_y * scaling)), 1, (0, 0, 255), 2);
+            cv2.circle(trajectory_image, (int(draw_x * scaling), int(draw_y * scaling)), 1, (0, 0, 255), 2)
         except:
             print("Something went wrong while drawing trajectory.")
-        # finally:
-        #     print("x: " + str(translation_vector[0]))
-        #     print("y: " + str(translation_vector[2]))
 
         # cv2.circle(trajectory_image, (int(draw_x*scaling), int(draw_y*scaling)), 1, (0, 0, 255), 2);
         # cv2.circle(trajectory_image, (true_x, true_y), 1, (255, 0, 0), 2);
@@ -279,8 +310,8 @@ def playImageSequence(left_img, right_img, K):
         cv2.putText(trajectory_image, text, (10, 50), cv2.FONT_HERSHEY_PLAIN, 1, (255, 255, 255), 1, 8);
         cv2.imshow("Trajectory", trajectory_image)
         k = cv2.waitKey(1) & 0xFF
-        if k == 27: break
-
+        if k == 27:
+            break
 
     # cv2.waitKey(0)
     print('Maximum Error: ', maxError)
@@ -295,8 +326,6 @@ if __name__ == '__main__':
     # left_img, right_img = oxfordWrapper.getNextImages()
     # left_img = cv2.cvtColor(left_img, cv2.COLOR_BGR2GRAY)
     # right_img = cv2. cvtColor(right_img, cv2.COLOR_BGR2GRAY)
-    # for i in range (0,60000):
-    #     print('/Users/HJK-BD//Downloads/kitti/00/image_0/{0:06d}.png'.format(i))
     left_img = getLeftImage(START_INDEX)
     right_img = getRightImage(START_INDEX)
 
