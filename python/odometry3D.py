@@ -3,6 +3,8 @@ import sys
 import numpy as np
 from numpy import ndarray
 import cv2
+import util
+
 from numpy.linalg import inv
 
 # from OxfordWrapper import OxfordWrapper
@@ -40,21 +42,6 @@ def getMLeft():
                      [0, 0, 1, 2.745884000000e-03]])
 
 
-def getKepoints():
-    file = '../data/keypoints.txt'
-    return np.genfromtxt(file, delimiter=' ', dtype=None)
-
-
-def getTruePose():
-    file = '/Users/HJK-BD//Downloads/kitti/poses/00.txt'
-    return np.genfromtxt(file, delimiter=' ', dtype=None)
-
-
-def getLandMarks():
-    file = '../data/p_W_landmarks.txt'
-    return np.genfromtxt(file, delimiter=' ', dtype=None)
-
-
 def getLeftImage(i):
     # return cv2.imread('/Users/HJK-BD//Downloads/kitti/00/image_0/{0:06d}.png'.format(i), 0)
     return cv2.imread("/run/media/rudiger/RobotCar/sequences/"+KITTI_SEQUENCE+"/image_2/{0:06d}.png".format(i), 0)
@@ -63,14 +50,6 @@ def getLeftImage(i):
 def getRightImage(i):
     # return cv2.imread('/Users/HJK-BD//Downloads/kitti/00/image_1/{0:06d}.png'.format(i), 0)
     return cv2.imread("/run/media/rudiger/RobotCar/sequences/"+KITTI_SEQUENCE+"/image_3/{0:06d}.png".format(i), 0)
-
-
-def calcRelativeTranslation(first_vector: ndarray, second_vector: ndarray)->ndarray:
-    return np.ndarray([second_vector[i] - first_vector[i] for i in range(2)])
-
-
-def euclidDistance(first_vector: ndarray, second_vector: ndarray)->float:
-    return sqrt((first_vector[0] - second_vector[0])**2 + (first_vector[1] - second_vector[1]) ** 2 + (first_vector[2] - second_vector[2]) ** 2)
 
 
 def featureTracking(img_t1, img_t2, points_t1, world_points):
@@ -165,8 +144,10 @@ def extract_keypoints_orb(left_image, right_image, K, baseline, refPoints=None):
         cv2.imshow("Matches", visualization)
         cv2.waitKey(1)
 
-    M_left = K.dot(np.hstack((np.eye(3), np.zeros((3, 1)))))
-    M_right = K.dot(np.hstack((np.eye(3), np.array([[-baseline, 0, 0]]).T)))
+    # M_left = K.dot(np.hstack((np.eye(3), np.zeros((3, 1)))))
+    M_left = getMLeft()
+    M_right = getMRight()
+    # M_right = K.dot(np.hstack((np.eye(3), np.array([[-baseline, 0, 0]]).T)))
 
     flipped_clean_left_points = np.vstack((clean_left_points.T, np.ones((1, clean_left_points.shape[0]))))
     flipped_clean_right_points = np.vstack((clean_right_points.T, np.ones((1, clean_right_points.shape[0]))))
